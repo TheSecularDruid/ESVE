@@ -7,36 +7,40 @@ import pandas as pd
 data = pd.read_csv(".\events.csv    ")
 
 #quick loop to only select a couple sequences
-seq1 = []
-seq2 = []
-seq3 = []
-seq1_ID = data['ID'][0]
-seq2_ID = data['ID'][1]
-seq3_ID = data['ID'][3]
+n_attr = len(data.columns) - 2 #removing ID and time attribute for now
 
-for k in range(len(data['ID'])):
-    if data['ID'][k] == seq1_ID:
-        seq1.append([data['time'][k],data['Venue'][k]])
-    elif data['ID'][k] == seq2_ID:
-        seq2.append([data['time'][k],data['Venue'][k]])
-    elif data['ID'][k] == seq3_ID:
-        seq3.append([data['time'][k],data['Venue'][k]])
+n_seq = 5
+sequences = [[-1,[]] for _ in range(n_seq)]   #First element is sequence ID, second element is a list of events
+
+index = 0
+for seq in sequences:
+    if data['ID'][index] not in [s[0] for s in sequences]:
+        seq[0] = data['ID'][index]
+    index+=1
+
+for index in range(data.shape[0]):
+    for seq in sequences:
+        if data['ID'][index]==seq[0]:
+            seq[1].append([data[attr][index] for attr in data.columns[1:]])
 
 
-seq1.sort(key=lambda x:x[0])
-seq2.sort(key=lambda x:x[0])
-seq3.sort(key=lambda x:x[0])
+for seq in sequences:
+    seq[1].sort(key=lambda x:x[0])
 
-venues = list(set(data['Venue']))
+attributes_values = [list(set(data[attr])) for attr in data.columns[1:]]
+n_attributes = len(attributes_values)
 external_stylesheets = [{"rel":"stylesheet"}]
 
 app = Dash(__name__,external_stylesheets=external_stylesheets)
 
-sequences = [seq1,seq2,seq3]
+
+venues = attributes_values[1]
 
 app.layout = html.Div(
     [html.Div(
-        [dcc.Dropdown(venues, event[1],className="event") for event in seq],
+        [dcc.Dropdown(venues, event[k],className="event")
+            for k in range(n_attributes)
+        for event in seq[1]],
         className = "sequence"
     )
     for seq in sequences]
