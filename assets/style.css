@@ -1,4 +1,4 @@
-.sequence {
+/*.sequence {
     display: flex; /* or inline-flex */
     flex-direction: row;
     /*justify-content: space-around;*/
@@ -8,5 +8,28 @@
 
 .event {
     flex-grow: 50;
+    width: 200px;
+}*/
+
+
+.attrValue {
+    flex-grow: 50;
+    width: 200px;
+}
+
+.horizontal_box {
+    display: flex;
+    flex-direction: row;
+}
+
+.vertical_box {
+    display: flex;
+    flex-direction: column;
+    row-gap: 50px;
+    margin-top: 100px;
+    margin-bottom:100px;
+}
+
+.sequence_chooser {
     width: 200px;
 }

@@ -36,33 +36,41 @@ for attr in attributes:
     attr_types[attr] = 'Categorical'
 
 
-##App setup
+##Display
 external_stylesheets = [{"rel":"stylesheet"}]
 app = Dash(__name__,external_stylesheets=external_stylesheets)
 
-
-# app.layout = html.Div(
-#     dcc.Dropdown(sequences.keys(),cur_seq_ID,id='sequence_chooser'),
-#     html.Div([
-#             html.Div(
-#                 [dcc.Dropdown(
-#                     attr_values[attr],
-#                     sequences[cur_seq_ID][event_index],
-#                     className='event')
-#                 for event_index in range(len(sequences[cur_seq_ID]))],
-#                 className='sequence')
-#         for attr_index,attr_type in enumerate(attr_types.values())]
-#
-#     )
-# )
-#
-#
-# [[(attr_values[attr],sequences[cur_seq_ID][event_index])
-#                 for event_index in range(len(sequences[cur_seq_ID]))]
-#         for attr_index,attr_type in enumerate(attr_types.values())]
-#
+def dropdown_list_or_graph(attr_index):
+    if attr_types[attr]=='Categorical':
+        DDList = []
+        for event in sequences[cur_seq_ID]:
+            cur_attribute = attributes[attr_index]
+            options = attr_values[cur_attribute]
+            value = event[attr_index-1]    # -1 cuz events don't have an "ID" field
+            DDList.append(dcc.Dropdown(options=options,value=value))
+        return DDList
+    if attr_types[attr]=='Numerical':
+        pass
 
 
+def horizontal_box(attr_index):
+    return html.Div(children=dropdown_list_or_graph(attr_index),className = 'horizontal_box')
+
+vertical_box = html.Div(children=[horizontal_box(attr_index) for attr_index in range(2,len(attributes))],#not displaying time, ID
+                        className = 'vertical_box')
+
+
+app.layout = html.Div(children = [
+                    html.Div(children=[
+                        html.P("Choose the sequence"),
+                        dcc.Dropdown(options=list(sequences.keys()),value=cur_seq_ID,id='sequence_chooser')],
+                        className="sequence_chooser"),
+                    vertical_box]
+                    )
+
+
+##Callbacks
+#TODO
 
 ####Run
 if __name__=='__main__':
