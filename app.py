@@ -122,6 +122,7 @@ app.layout = html.Div(children = [
                         dcc.ConfirmDialog(message='The MAQUI context is not up to date, continue ?',id="MAQUI-uptodate"),
                         html.Button("Load data from disk",id='disk-data-fetch',n_clicks=0),
                         html.Button("Add an event to the sequence",id='add-event',n_clicks=0),
+                        dcc.Input(placeholder="ID of event to remove",debounce=True,id="remove-event"),
                         dcc.Store(id='sequences_data'),
                         dcc.Store(id='attributes_data'),
                         html.Button("Save data to disk",id='data-save')],
@@ -201,11 +202,12 @@ def display_sequence_chooser(previous_options,sequences,_,r):
     Input({'type':'type_chooser_radio','place':ALL},'value'),
     Input({'type':'graph_input','place':ALL},'value'),
     Input('add-event','n_clicks'),
+    Input('remove-event','value'),
     State('sequence_chooser_dd','value'),
     State('sequences_data','data'),
     State('attributes_data','data'),
     )
-def update_data(a,b,c,d,e,f,seq_id,sequences,attr_data):  #alphabet letters are placeholder for dash auto-generated JS or smth
+def update_data(a,b,c,d,e,f,g,seq_id,sequences,attr_data):  #alphabet letters are placeholder for dash auto-generated JS or smth
     calling = callback_context.triggered[0]
     if calling['prop_id']=='.' or calling['prop_id']=='disk-data-fetch.n_clicks':  #if calling is empty, ie init call
         return load_data_from_disk()
@@ -215,6 +217,10 @@ def update_data(a,b,c,d,e,f,seq_id,sequences,attr_data):  #alphabet letters are 
 
     elif calling['prop_id']=='add-event.n_clicks':
         sequences[seq_id].append(sequences[seq_id][-1].copy())
+        return sequences,attr_data
+
+    elif calling['prop_id']=='remove-event.value':
+        sequences[seq_id].pop(int(calling['value']))
         return sequences,attr_data
 
     else: #input id is a dictionnary
