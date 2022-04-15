@@ -42,25 +42,43 @@ def load_data_from_disk():
         attr_types[attr] = 'Categorical'
 
     attributes_data = {'names':attributes,'values':attr_values,'types':attr_types}
+
     return sequences,attributes_data
 
 def load_data_from_MAQUI():
     try:
-        context = requests.get('localhost:5000/getCurrentContext')
-        if not context["upToDate"]:
-            raise preventUpdate
+        context_rep = requests.get('http://localhost:5000/getCurrentContext')
+        context = context_rep.json()
+        if not context["UpToDate"]:
+            raise PreventUpdate
+            print('no context selected on MAQUI')
 
-        context.raise_for_status()
+        context_rep.raise_for_status()
 
-        params = {"panelID":context["Pannel"],'ForSID':context['Focus'],'outputType':context['Output']}
-        data = requests.get('localhost:5000/getCurrentData',params=params)
-        data.raise_for_status()
+        params = {"panelID":context["Pannel"],'ForSID':context['Focus'],'outputType':context['Output'],'write':False}
+        data_rep = requests.get('http://localhost:5000/saveLocalSequences',params=params)
+        data_rep.raise_for_status()
 
-        return data
+        sequences = data_rep.json()
+
+        attributes_rep = requests.get('http://localhost:5000/getAttributeList/all')
+        attributes_rep.raise_for_status()
+
+        attributes_maqui = attributes_rep.json()
+
+        attributes = {'names':[],'values':{},'types':{}}
+        for attr in attributes_maqui:
+            attr_name = attr['attributeName']
+            attributes['names'].append(attr_name)
+            attributes['types'][attr_name] = attr['numericalOrCategorical']
+            attributes['types'][attr_name][0].upper()
+        #TODO finish here lol
+
+        print(attributes)
+        raise PreventUpdate
     except requests.exceptions.RequestException as e:
         print(e)
-        print(e.text)
-        print("ya fucked up bra")
+        raise PreventUpdate
 
 ##Display
 external_stylesheets = [{"rel":"stylesheet"}]
@@ -68,7 +86,6 @@ app = Dash(__name__,external_stylesheets=external_stylesheets)
 
 def dropdown_list_or_graph(attr_index,cur_seq_ID,attr_data,sequences):
     attr_name = attr_data["names"][attr_index]
-    id_list = []
     if attr_data["types"][attr_name]=='Categorical':
         DDList = []
         for event_id, event in enumerate(sequences[cur_seq_ID]):
@@ -76,7 +93,6 @@ def dropdown_list_or_graph(attr_index,cur_seq_ID,attr_data,sequences):
             value = event[attr_index-1]    # -1 cuz events don't have an "ID" field
             dd_id = {'place':str(attr_index) + 'c' + str(event_id),'type':'attr_value_dd'}
             DDList.append(dcc.Dropdown(options=options,value=value,className="categ_event_dd",id=dd_id,clearable=False))
-            id_list.append(dd_id)
         return DDList
     if attr_data["types"][attr_name]=='Numerical':
         values = dict({
@@ -85,8 +101,16 @@ def dropdown_list_or_graph(attr_index,cur_seq_ID,attr_data,sequences):
             })
         fig = px.scatter(values,x='Time',y='Value')
         id = str(attr_index)
-        id_list.append(id)
-        return [dcc.Graph(figure=fig,id=id)]
+        graph = dcc.Graph(figure=fig,id=id)
+
+        inputList = []
+        for event_id,event in enumerate(sequences[cur_seq_ID]):
+            input_id = {'type':'graph_input','place':str(attr_index)+'c'+str(event_id)}
+            input_value = event[attr_index-1]
+
+            inputList.append(dcc.Input(id=input_id,value=input_value,debounce=True,n_submit=0))
+
+        return [html.Div([graph,html.Div(inputList)],className='vertical_box')]
 
 app.layout = html.Div(children = [
                     html.Div(children=[
@@ -175,12 +199,13 @@ def display_sequence_chooser(previous_options,sequences,_,r):
     Input('disk-data-fetch','n_clicks'),
     Input({'type':'attr_value_dd', 'place': ALL}, 'value'),
     Input({'type':'type_chooser_radio','place':ALL},'value'),
+    Input({'type':'graph_input','place':ALL},'value'),
     Input('add-event','n_clicks'),
     State('sequence_chooser_dd','value'),
     State('sequences_data','data'),
     State('attributes_data','data'),
     )
-def update_data(a,b,c,d,e,seq_id,sequences,attr_data):  #alphabet letters are placeholder for dash auto-generated JS or smth
+def update_data(a,b,c,d,e,f,seq_id,sequences,attr_data):  #alphabet letters are placeholder for dash auto-generated JS or smth
     calling = callback_context.triggered[0]
     if calling['prop_id']=='.' or calling['prop_id']=='disk-data-fetch.n_clicks':  #if calling is empty, ie init call
         return load_data_from_disk()
@@ -193,7 +218,8 @@ def update_data(a,b,c,d,e,seq_id,sequences,attr_data):  #alphabet letters are pl
         return sequences,attr_data
 
     else: #input id is a dictionnary
-        call_id = loads(calling['prop_id'][:-6])       #removing the ".value" part of the string, idk why it's there
+        end = calling['prop_id'].index('}.')
+        call_id = loads(calling['prop_id'][:end+1])       #removing the ".value" part of the string, idk why it's there
         call_value = calling['value']
         if call_id['type']=='type_chooser_radio':
             attr_index = call_id['place']
@@ -201,7 +227,7 @@ def update_data(a,b,c,d,e,seq_id,sequences,attr_data):  #alphabet letters are pl
             attr_data['types'][attr_name] = call_value
             return sequences,attr_data
 
-        elif call_id['type']=='attr_value_dd':
+        elif call_id['type']=='attr_value_dd' or call_id['type']=='graph_input':
             place = call_id['place']
             attr_id, event_id = map(int,place.split('c'))
             sequences[seq_id][event_id][attr_id-1] = call_value   #events have no id hence -1
