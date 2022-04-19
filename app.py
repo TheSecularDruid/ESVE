@@ -12,7 +12,11 @@ import pandas as pd
 import csv
 import requests
 from json import loads
-
+import sklearn
+from sklearn.ensemble import RandomForestClassifier
+from sklearn.neighbors import KNeighborsClassifier
+from sklearn.svm import SVC
+import pickle
 
 ##Data loading
 def load_data_from_disk():
@@ -125,6 +129,14 @@ app.layout = html.Div(children = [
                         dcc.Input(placeholder="ID of event to remove",debounce=True,id="remove-event"),
                         dcc.Store(id='sequences_data'),
                         dcc.Store(id='attributes_data'),
+                        dcc.Store(id='prediction_model'),
+                        dcc.Dropdown(value='sklearn.neighbors.KNeighborsClassifier',
+                                     options=[
+                                            {'label':'knn','value':'KNeighborsClassifier'},
+                                            {'label':'SVN','value':'SVC'},
+                                            {'label':'random forest','value':'RandomForestClassifier'}],
+                                     id='model_type'),
+                        html.Button('Train model on current data',id='train-model',n_clicks=0),
                         html.Button("Save data to disk",id='data-save')],
                         className='horizontal_box'),
                     html.Div(id='events-disp')]
@@ -137,8 +149,9 @@ app.layout = html.Div(children = [
     Input('sequence_chooser_dd','value'),
     Input("attributes_data","data"),
     State("sequences_data",'data'),
-    State({'type':'type_chooser_radio','place':ALL},'value'))
-def update_current_sequence_display(cur_seq_ID,attributes_data,sequences,types):
+    State({'type':'type_chooser_radio','place':ALL},'value'),
+    State('prediction_model','data'))
+def update_current_sequence_display(cur_seq_ID,attributes_data,sequences,types,model):
     children = []
     for attr_index in range(2,len(attributes_data["names"])):   #not displaying time, ID
         line = []
@@ -159,10 +172,19 @@ def update_current_sequence_display(cur_seq_ID,attributes_data,sequences,types):
         line = line + dropdown_list_or_graph(attr_index,cur_seq_ID,attributes_data,sequences)
         children.append(html.Div(line,className='horizontal_box'))
 
+    if model==None:
+        print("no model has been trained yet")
+    else:
+        model = bytes(model,'ISO-8859-1')
+        model = pickle.loads(model)
+        scores = []
+        for event in sequences[cur_seq_ID]:
+            translated_event = [string_to_number(k) for k in event[:-1]]
+            score = str(model.predict([translated_event]))
+            scores.append(html.P(score))
+        children.append(html.Div(scores,className='horizontal_box'))
     return children
 
-
-    return children
 @app.callback(
             Output('sequence_chooser_dd','options'),
             Output('sequence_chooser_dd','value'),
@@ -260,6 +282,41 @@ def save_data(n,sequences,attributes):
         f.close()
     return n
 
+## Prediction model
+str_to_nb = {}
+max_str_to_nb = 0
+def string_to_number(str):
+    global str_to_nb,max_str_to_nb
+    if str in str_to_nb.keys():
+        return str_to_nb[str]
+    else:
+        max_str_to_nb += 1
+        str_to_nb[str] = max_str_to_nb
+        return max_str_to_nb
+
+@app.callback(
+    Output('prediction_model','data'),
+    Input('train-model','n_clicks'),
+    State('sequences_data','data'),
+    State('model_type','value'))
+def train_model(n,sequences,model_type):
+    model = eval(model_type)()
+    X = []
+    y = []
+    if sequences == None:
+        raise PreventUpdate
+    else:
+        for seq in sequences.values():
+            for event in seq:
+                X.append(event[:-1])
+                y.append(int(event[-1]))
+
+        for event_id in range(len(X)):
+            X[event_id] = [string_to_number(k) for k in X[event_id]]
+        y = [int(k) for k in y]
+        model.fit(X=X,y=y)
+
+        return pickle.dumps(model).decode('ISO-8859-1')
 
 ####Run
 if __name__=='__main__':
