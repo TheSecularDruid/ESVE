@@ -19,9 +19,12 @@ from sklearn.neighbors import KNeighborsClassifier
 from sklearn.svm import SVC
 import pickle
 from datetime import datetime
+from functools import reduce
 
 ##Data loading
 def load_data_from_disk():
+    n_seq_to_load = 50
+
     sequences = {}
     attr_values = {}
     with open("./events.csv",'r') as f:
@@ -41,6 +44,9 @@ def load_data_from_disk():
 
         f.close()
 
+    # if len(sequences.keys())>=n_seq_to_load:
+    #     for k in reversed(list(sequences.keys())[50:]):
+    #         sequences.pop(k)
 
     for seq in sequences.values():
         seq.sort(key=lambda x:x[0])
@@ -232,7 +238,7 @@ def update_current_sequence_display(cur_seq_ID,attributes_data,sequences,types):
         if not types: #list is empty
             value = 'categorical'
         else:
-            value = types[attr_index-2]   #types is already cut off at initialization
+            value = types[attr_index-1]   #types is already cut off at initialization
         type_chooser = dcc.RadioItems(options=options,value=value,id=radio_id,inline=False)
         line.append(type_chooser)
         line = line + dropdown_list_or_graph(attr_index,cur_seq_ID,attributes_data,sequences)
@@ -330,6 +336,10 @@ def update_sequences_and_attributes_data(a,b,c,d,e,f,g,seq_id,sequences,attr_dat
     State('attributes_data','data'),
     prevent_initial_call=True)
 def save_data(n,sequences,attributes):   #todo update to the new data formatting
+    for sequence in sequences.values():
+        for event in sequence:
+            event[0:2] = [reduce(lambda i,j: i + ' ' + j, event[0:2])]
+    attributes['names'][1:3] = ['time']
     with open("./events_saved.csv",'w',newline='') as f:
         w = csv.writer(f,csv.QUOTE_NONNUMERIC)
         w.writerow(attributes['names'])
@@ -386,9 +396,10 @@ def display_closest_opposite_sequence(_,sequences,cur_seq_ID,attributes,model):
             ev_disp.append(html.P(attr))
         ev_disp = html.Div(ev_disp)
         seq_disp.append(ev_disp)
-    seq_disp = html.Div(seq_disp,style={'display':'grid'})
+    seq_disp = html.Div(seq_disp,className = 'horizontal_box')
 
-    return seq_disp
+    intro = "the closest opposite sequence is sequence "+str(closest_seq_id)+" which is at a distance of "+str(min_dist)
+    return html.Div([intro,seq_disp])
 
 @app.callback(
     Output('prediction_data','data'),
@@ -449,6 +460,8 @@ def string_to_number(str):
     State('sequences_data','data'),
     State('model_type','value'))
 def train_model(n,sequences,model_type):
+    print(model_type)
+    print(type(model_type))
     model = eval(model_type)()
     X = []
     y = []
@@ -532,6 +545,10 @@ def find_closest_opposite_sequence(seq_origin,sequences,attributes,model,type_di
     return  closest_seq,closest_seq_id,min_dist
 
 def distance_event(event1,event2,attr_types,attr_values):   #TODO add log on amt, divide by ecart-type instead of max, frequence ?
+    '''implements a distance for mixed data-type structures
+    event1, event2 : the two events between which the distance is computed (operation is commutative)
+    attr_types : a list of string containing the types of the attributes (categorical or numerical), should be ordered like the attribute-values in event1 and event2
+    attr_values : list of list containing the values of each attribute without repetition, same order as attr_types'''
     dist = 0
     for attr_id,attr_type in enumerate(attr_types.values()):
         if attr_type == 'numerical':
@@ -543,6 +560,14 @@ def distance_event(event1,event2,attr_types,attr_values):   #TODO add log on amt
                 dist += 1
             else:
                 dist += 0
+        if attr_type == 'date':
+            pass  #todo
+        if attr_type == 'hour':
+            pass
+        if attr_type == 'masked':
+            pass
+        else:
+            print('unrecognized event type in distance_event')
     return dist/len(attr_types.keys())
 
 def find_closest_opposite_event(event,sequences,attr_types,attr_values,model):
